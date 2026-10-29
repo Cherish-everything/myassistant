@@ -1,0 +1,24 @@
+# secrets / local state
+.env
+credentials_*.json
+token_*.json
+email_watch_state.json
+important_emails.md
+.last_brief_date.txt
+
+# generated at runtime
+ava_memory_store/
+ava_vault/
+logs/
+ava_speech_core.mp3
+*.mp3
+scan_*.png
+
+# python / editor
+__pycache__/
+*.pyc
+venv/
+.venv/
+.vscode/
+important_emails.md
+brain.py

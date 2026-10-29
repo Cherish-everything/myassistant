@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Core Interface</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: transparent;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .core-container {
+            position: relative;
+            /* Anchor reference for absolute child vectors */
+            width: 400px;
+            height: 400px;
+            background: rgba(10, 16, 30, 0.95);
+            border: 2px solid #ff00d9;
+            box-shadow: 0 0 30px rgba(255, 0, 200, 0.2);
+            border-radius: 50%;
+
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            box-sizing: border-box;
+        }
+
+        /* NEW SVG CANVAS CONTAINER STYLING */
+        .svg-timer-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+            /* Rotates circle to begin counting down from the top vertical axis */
+            pointer-events: none;
+            /* Allows mouse clicks to pass straight through to text inputs */
+            z-index: 1;
+        }
+
+        .bg-track-circle {
+            fill: none;
+            stroke: rgba(255, 0, 217, 0.05);
+            stroke-width: 6;
+        }
+
+        .active-progress-circle {
+            fill: none;
+            stroke: #00ffcc;
+            /* Sci-Fi Core Countdown Cyan */
+            stroke-width: 6;
+            stroke-linecap: round;
+            /* 2 * PI * Radius (190) = ~1193.8 */
+            stroke-dasharray: 1193.8;
+            stroke-dashoffset: 1193.8;
+            /* Hidden by default until called */
+            transition: stroke-dashoffset 0.4s linear, stroke 0.4s ease;
+            filter: drop-shadow(0px 0px 6px #00ffcc);
+        }
+
+        /* Push interactive layout content cards safely above vector drawings */
+        #status-display,
+        #output-readout,
+        .input-wrapper {
+            position: relative;
+            z-index: 2;
+        }
+
+        #status-display {
+            color: #ff00d9;
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            text-shadow: 0 0 5px #ff00d9;
+            margin-top: 35px;
+        }
+
+        #output-readout {
+            color: #ffffff;
+            font-size: 13px;
+            text-align: center;
+            width: 100%;
+
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            min-height: 110px;
+            max-height: 160px;
+            overflow-y: auto;
+
+            line-height: 1.5;
+            padding: 10px 15px;
+            box-sizing: border-box;
+        }
+
+        .input-wrapper {
+            width: 75%;
+            display: flex;
+            border: 1px solid #555555;
+            border-radius: 20px;
+            background: rgba(55, 20, 46, 0.5);
+            padding: 5px 10px;
+            transition: all 0.3s ease;
+            margin-top: auto;
+            margin-bottom: 15px;
+        }
+
+        .input-wrapper:focus-within {
+            border-color: #ff00d9;
+            box-shadow: 0 0 10px rgba(255, 0, 43, 0.2);
+        }
+
+        #user-input-field {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #ffffff;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            padding: 8px 5px;
+        }
+
+        #user-input-field::placeholder {
+            color: #445566;
+        }
+
+        .send-node-btn {
+            background: transparent;
+            border: none;
+            color: #ff00d9;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 0 5px;
+            outline: none;
+        }
+
+        .send-node-btn:hover {
+            text-shadow: 0 0 8px #ff00d9;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="core-container">
+        <svg class="svg-timer-layer" viewBox="0 0 400 400">
+            <circle class="bg-track-circle" cx="200" cy="200" r="190"></circle>
+            <circle class="active-progress-circle" id="pulseVector" cx="200" cy="200" r="190"></circle>
+        </svg>
+
+        <div id="status-display">CORE // STANDBY</div>
+
+        <div id="output-readout">System links active. Enter initialization command sequence below...</div>
+
+        <div class="input-wrapper">
+            <input type="text" id="user-input-field" placeholder="Enter command..." onkeydown="checkKeyStroke(event)">
+            <button class="send-node-btn" onclick="transmitPayload()">EXEC</button>
+        </div>
+    </div>
+
+    <script src="qwebchannel.js"></script>
+    <script>
+        let pythonBackend;
+
+        new QWebChannel(qt.webChannelTransport, function (channel) {
+            pythonBackend = channel.objects.backend;
+        });
+
+        // =====================================================================
+        // 🔮 INTERACTIVE JS TIMER ANIMATION MODULE (NEW)
+        // =====================================================================
+        window.updateTimerVisual = function (percentage, phaseType) {
+            const vector = document.getElementById('pulseVector');
+            const maxCircumference = 1193.8;
+
+            // Adjust visual tracking colors depending on task modes
+            if (phaseType === "WORK") {
+                vector.style.stroke = "#00ffcc"; // Laser Cyan
+                vector.style.filter = "drop-shadow(0px 0px 6px #00ffcc)";
+            } else if (phaseType === "BREAK") {
+                vector.style.stroke = "#ff9900"; // Warm Orange rest matrix
+                vector.style.filter = "drop-shadow(0px 0px 6px #ff9900)";
+            } else {
+                // Reset/Hide circle loop when complete
+                vector.style.strokeDashoffset = maxCircumference;
+                return;
+            }
+
+            // Morph stroke layout geometry live
+            const offset = maxCircumference - (percentage / 100) * maxCircumference;
+            vector.style.strokeDashoffset = offset;
+        };
+
+        window.displayResponse = function (responseText) {
+            document.getElementById('status-display').innerText = "CORE // STANDBY";
+            document.getElementById('status-display').style.color = "#ff00d9";
+            document.getElementById('output-readout').innerText = responseText;
+
+            // If the whole Pomodoro sequence ends completely, wipe the visual tracker rings clean
+            if (responseText.includes("CYCLE TERMINATED")) {
+                window.updateTimerVisual(0, "RESET");
+            }
+
+            const inputField = document.getElementById('user-input-field');
+            if (inputField) inputField.value = "";
+        };
+
+        function runAICommand(spokenText) {
+            const inputField = document.getElementById('user-input-field');
+            if (inputField) inputField.value = spokenText;
+
+            document.getElementById('status-display').innerText = "THINKING...";
+            document.getElementById('status-display').style.color = "#ffaa00";
+            document.getElementById('output-readout').innerHTML = `<i>[VOICE]: ${spokenText}</i><br><br>Querying AI core clusters...`;
+
+            if (pythonBackend) {
+                pythonBackend.get_ai_response(spokenText);
+            }
+        }
+
+        function checkKeyStroke(event) {
+            if (event.key === "Enter") {
+                transmitPayload();
+            }
+        }
+
+        function transmitPayload() {
+            const inputField = document.getElementById('user-input-field');
+            const promptText = inputField.value.trim();
+
+            if (!promptText) return;
+
+            document.getElementById('status-display').innerText = "THINKING...";
+            document.getElementById('status-display').style.color = "#ffaa00";
+            document.getElementById('output-readout').innerHTML = `<i>[USER]: ${promptText}</i><br><br>Querying AI core clusters...`;
+
+            if (pythonBackend) {
+                pythonBackend.get_ai_response(promptText);
+            }
+        }
+    </script>
+</body>
+
+</html>
